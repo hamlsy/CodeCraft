@@ -3,7 +3,7 @@
     <id>com.github.hamlsy.codecraft</id>
     <name>CodeCraft</name>
     <vendor>hamlsy</vendor>
-
+    <description>A Minecraft-themed code animation plugin for IntelliJ IDEA</description>
     <depends>com.intellij.modules.platform</depends>
 
     <resource-bundle>messages.MyBundle</resource-bundle>

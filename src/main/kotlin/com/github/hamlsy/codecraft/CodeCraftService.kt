@@ -3,11 +3,9 @@ package com.github.hamlsy.codecraft
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import java.util.Random
-import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.Clip
 import javax.swing.Timer
-import java.awt.Point
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
@@ -16,12 +14,13 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 
 @Service
-class CodeCraftService(private val project: Project) {
+class CodeCraftService {
+
     // 블록 이미지들을 저장할 맵
-    private val blockImages = mutableMapOf<String, BufferedImage>()
+    val blockImages = mutableMapOf<String, BufferedImage>()
 
     // 활성화된 블록 애니메이션 목록
-    private val activeBlocks = mutableListOf<BlockAnimation>()
+    val activeBlocks = mutableListOf<BlockAnimation>()
 
     // 설정값
     var enableAnimation = true
@@ -141,7 +140,7 @@ class CodeCraftService(private val project: Project) {
 
     private fun createBlockAnimation(event: DocumentEvent) {
         // 현재 활성 에디터와 커서 위치 가져오기
-        val editor = EditorFactory.getInstance().editors.firstOrNull { it.document == event.document }
+        val editor = EditorFactory.getInstance().editors(event.document, project).findFirst().orElse(null);
         if (editor != null) {
             // 커서 위치 계산
             val offset = event.offset
@@ -200,3 +199,34 @@ class CodeCraftService(private val project: Project) {
         // 에디터 리페인트 요청
         EditorFactory.getInstance().allEditors.forEach { it.component.repaint() }
     }
+    // 블록 애니메이션 클래스
+    inner class BlockAnimation(
+        val blockType: String,
+        val image: BufferedImage,
+        val startX: Int,
+        val startY: Int,
+        val isTNT: Boolean = false
+    ) {
+        var x: Int = startX
+        var y: Int = startY
+        var velocityY: Float = 2f
+        var rotation: Float = 0f
+        var isExploded: Boolean = false
+
+        fun update() {
+            // 중력 적용
+            velocityY += 0.2f
+            y += velocityY.toInt()
+
+            // 약간의 회전 적용
+            rotation += 0.01f
+
+            // 좌우 약간 움직임
+            x += random.nextInt(3) - 1
+        }
+    }
+
+    enum class ShakeType {
+        TYPE, DELETE
+    }
+}

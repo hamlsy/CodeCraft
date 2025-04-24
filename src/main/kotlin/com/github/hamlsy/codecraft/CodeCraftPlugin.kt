@@ -18,13 +18,9 @@ import java.awt.Point
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
-/**
- * CodeCraft 플러그인 메인 클래스
- * 에디터에 문서 리스너를 등록하고 애니메이션 효과를 관리합니다.
- */
+
 class CodeCraftStartupActivity : StartupActivity {
     override fun runActivity(project: Project) {
-        // 플러그인 서비스 초기화
         val service = project.getService(CodeCraftService::class.java)
         service.initialize()
     }

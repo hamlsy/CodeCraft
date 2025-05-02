@@ -9,7 +9,18 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hamlsy.codecraft.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.hamlsy.codecraft.startup.MyProjectActivity" />
+        <applicationService serviceImplementation="com.github.hamlsy.codecraft.CodeCraftSettingsState"/>
+        <projectService serviceImplementation="com.github.hamlsy.codecraft.CodeCraftService"/>
+        <applicationConfigurable parentId="appearance" instance="com.github.hamlsy.codecraft.CodeCraftConfigurable"/>
     </extensions>
+    
+    <applicationListeners>
+        <listener class="com.github.hamlsy.codecraft.CodeCraftEditorComponent$Companion"
+                  topic="com.intellij.openapi.editor.event.EditorFactoryListener"/>
+    </applicationListeners>
+    
+    <projectListeners>
+        <listener class="com.github.hamlsy.codecraft.CodeCraftPlugin"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </projectListeners>
 </idea-plugin>

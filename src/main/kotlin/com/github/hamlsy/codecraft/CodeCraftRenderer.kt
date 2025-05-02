@@ -5,10 +5,10 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
-import com.intellij.openapi.editor.markup.HighlighterLayer
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
+import java.awt.AlphaComposite
 import java.awt.geom.AffineTransform
 import javax.swing.JComponent
 import javax.swing.JLayeredPane
@@ -18,56 +18,81 @@ import javax.swing.JLayeredPane
  */
 class CodeCraftEditorComponent(private val editor: Editor) : JComponent() {
 
-    private val service = editor.project?.getService(CodeCraftService::class.java)
+    private val project = editor.project
+    private val service = project?.getService(CodeCraftService::class.java)
 
     init {
+        // Set component properties
         isOpaque = false
+        
+        // Set preferred size to match editor
+        preferredSize = editor.component.size
+        
+        // Debug output
+        println("CodeCraftEditorComponent initialized for editor: ${editor.document.text.length} chars")
+        println("Editor component size: ${editor.component.width}x${editor.component.height}")
     }
 
     override fun paint(g: Graphics) {
         super.paint(g)
-
-        if (service == null || !service.enableAnimation) return
-
+        
+        // Get graphics object
         val g2d = g as Graphics2D
+
+        // Set rendering hints for better quality
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
 
-        // 모든 활성 블록 렌더링
-        service.activeBlocks.forEach { block ->
-            // 현재 블록의 변환 상태 저장
-            val oldTransform = g2d.transform
+        // Get service and active blocks
+        val service = project?.getService(CodeCraftService::class.java)
+        if (service == null || !service.enableAnimation) {
+            println("Animation disabled or service is null")
+            return
+        }
+        
+        val blocks = service.getActiveBlocks()
+        if (blocks.isNotEmpty()) {
+            println("Rendering ${blocks.size} blocks")
+        }
 
-            // 블록 회전 적용
-            val centerX = block.x + block.image.width / 2
-            val centerY = block.y + block.image.height / 2
-
-            val transform = AffineTransform()
-            transform.translate(centerX.toDouble(), centerY.toDouble())
-            transform.rotate(block.rotation.toDouble())
-            transform.translate((-block.image.width / 2).toDouble(), (-block.image.height / 2).toDouble())
-
-            g2d.transform = transform
-
-            // 블록 이미지 그리기
-            g2d.drawImage(block.image, 0, 0, null)
-
-            // TNT가 폭발 상태면 폭발 효과 그리기
-            if (block.isTNT && block.isExploded) {
-                // 폭발 이미지나 이펙트 그리기
-                service.blockImages["explosion"]?.let { explosionImg ->
-                    g2d.drawImage(
-                        explosionImg,
-                        -explosionImg.width / 4,
-                        -explosionImg.height / 4,
-                        explosionImg.width * 2,
-                        explosionImg.height * 2,
-                        null
-                    )
-                }
+        // Draw each block
+        for (block in blocks) {
+            try {
+                // Save current transform and composite
+                val oldTransform = g2d.transform
+                val oldComposite = g2d.composite
+                
+                // Set alpha for transparency
+                g2d.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, block.alpha)
+                
+                // Calculate center point for rotation
+                val centerX = block.x
+                val centerY = block.y
+                
+                // Apply transformations (translate, rotate, scale)
+                g2d.translate(centerX, centerY)
+                g2d.rotate(block.rotation)
+                g2d.scale(3.0, 3.0)  // Scale by 3x to make blocks visible
+                
+                // Draw the image
+                g2d.drawImage(block.image, -block.image.width / 2, -block.image.height / 2, null)
+                
+                // Draw red border for debugging
+                g2d.color = java.awt.Color.RED
+                g2d.drawRect(-block.image.width / 2, -block.image.height / 2, block.image.width, block.image.height)
+                
+                // Restore original transform and composite
+                g2d.transform = oldTransform
+                g2d.composite = oldComposite
+                
+                // Draw coordinates for debugging (in screen space)
+                g2d.color = java.awt.Color.RED
+                g2d.drawString("x=${block.x}, y=${block.y}", block.x, block.y - 5)
+            } catch (e: Exception) {
+                println("Error rendering block: ${e.message}")
+                e.printStackTrace()
             }
-
-            // 변환 상태 복원
-            g2d.transform = oldTransform
         }
     }
 
@@ -77,25 +102,46 @@ class CodeCraftEditorComponent(private val editor: Editor) : JComponent() {
             return object : EditorFactoryListener {
                 override fun editorCreated(event: EditorFactoryEvent) {
                     val editor = event.editor
+                    val project = editor.project ?: return
+                    
+                    // Create component
                     val component = CodeCraftEditorComponent(editor)
-
-                    // 에디터의 레이어드 패널에 컴포넌트 추가
-                    val layeredPane = editor.component.rootPane?.layeredPane
+                    
+                    // Add to editor's layered pane
+                    val layeredPane = editor.contentComponent.parent as? JLayeredPane
                     layeredPane?.add(component, JLayeredPane.POPUP_LAYER)
-
-                    // 컴포넌트 위치와 크기 설정
-                    component.setBounds(0, 0, layeredPane?.width ?: 0, layeredPane?.height ?: 0)
-
-                    // 레이어드 패널 크기 변경 리스너 추가
-                    layeredPane?.addComponentListener(object : java.awt.event.ComponentAdapter() {
+                    
+                    // Set bounds to match editor
+                    component.bounds = editor.component.bounds
+                    
+                    println("Added CodeCraftEditorComponent to editor layered pane")
+                    
+                    // Add component resize listener
+                    editor.component.addComponentListener(object : java.awt.event.ComponentAdapter() {
                         override fun componentResized(e: java.awt.event.ComponentEvent) {
-                            component.setBounds(0, 0, layeredPane.width, layeredPane.height)
+                            component.bounds = editor.component.bounds
+                            component.preferredSize = editor.component.size
+                            component.revalidate()
+                            component.repaint()
                         }
                     })
                 }
 
                 override fun editorReleased(event: EditorFactoryEvent) {
-                    // 에디터가 해제될 때 클린업 코드
+                    // Clean up when editor is released
+                    val editor = event.editor
+                    val layeredPane = editor.contentComponent.parent as? JLayeredPane
+                    
+                    // Find and remove our component
+                    layeredPane?.components?.forEach { component ->
+                        if (component is CodeCraftEditorComponent) {
+                            layeredPane.remove(component)
+                            println("Removed CodeCraftEditorComponent from editor layered pane")
+                        }
+                    }
+                    
+                    // Repaint to ensure clean removal
+                    layeredPane?.repaint()
                 }
             }
         }
@@ -133,11 +179,12 @@ class EditorShakeEffect(private val editor: Editor) {
                 return@Timer
             }
 
-            // 랜덤한 오프셋 적용
-            val offsetX = random.nextInt(intensity * 2) - intensity
-            val offsetY = random.nextInt(intensity * 2) - intensity
+            // 랜덤한 오프셋 적용 (진폭은 시간이 지남에 따라 감소)
+            val factor = remainingTime.toFloat() / duration
+            val offsetX = (random.nextInt(intensity * 2) - intensity) * factor
+            val offsetY = (random.nextInt(intensity * 2) - intensity) * factor
 
-            editor.component.setLocation(originalPosition.x + offsetX, originalPosition.y + offsetY)
+            editor.component.setLocation(originalPosition.x + offsetX.toInt(), originalPosition.y + offsetY.toInt())
 
             remainingTime -= 16
         }
